@@ -61,8 +61,10 @@ ReactESP app([]() {
    * Vessel heading can be indicated as headingCompass (uncorrected for
    * Deviation) or as part of an attitude data group (i.e. yaw, pitch, roll).
    * This example provides both.
+   * Calibration corrects for deviation(?) and this should be headingMagnetic?
+   * 
    */
-  const char* kSKPathHeading = "navigation.headingCompass";
+  const char* kSKPathHeading = "navigation.headingMagnetic";
   const char* kSKPathAttitude = "navigation.attitude";
   /**
    * This example shows heading, pitch, and roll. If you want other parameters
