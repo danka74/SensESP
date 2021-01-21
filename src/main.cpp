@@ -39,10 +39,8 @@ ReactESP app([]() {
   SensESPAppBuilder builder;
 
   // Set whatever options you want, then create the global SensESPApp() object with get_app():
-  sensesp_app = builder.set_standard_sensors()
+  sensesp_app = builder.set_standard_sensors(UPTIME)
               ->set_hostname("CompassBME280")
-  //          ->set_wifi("openplotter", "Tra55el!")
-  //          ->set_sk_server("10.10.10.1", 3000)
               ->get_app();
 
   /**
