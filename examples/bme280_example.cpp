@@ -9,6 +9,9 @@
 #include "sensesp_app.h"
 #include "sensors/bme280.h"
 #include "signalk/signalk_output.h"
+#include "transforms/dew_point.h"
+#include "transforms/air_density.h"
+#include "transforms/heat_index.h"
 
 ReactESP app([]() {
 #ifndef SERIAL_DEBUG_DISABLED
@@ -52,5 +55,27 @@ ReactESP app([]() {
 
   bme_humidity->connect_to(new SKOutputNumber("environment.outside.humidity"));
 
+
+  // Use the transform dewPoint to calculate the dewpoint based upon the temperature and humidity.
+  auto* dew_point = new DewPoint();
+
+  dew_point->connect_from(bme_temperature, bme_humidity)
+          ->connect_to(new SKOutputNumber("environment.outside.dewPointTemperature"));
+
+  // Use the transform airDensity to calculate the air density of humid air based
+  // upon the temperature, humidity and pressure.
+  auto* airDensity = new AirDensity();
+
+  airDensity->connect_from(bme_temperature,bme_humidity,bme_pressure)
+          ->connect_to(new SKOutputNumber("environment.outside.airDensity"));
+
+  // Use the transform heatIndex to calculate the heat index based upon the temperature and humidity.
+  auto* heat_index_temperature = new HeatIndexTemperature();
+
+  heat_index_temperature->connect_from(bme_temperature, bme_humidity)
+          ->connect_to(new SKOutputNumber("environment.outside.heatIndexTemperature"))
+          ->connect_to(new HeatIndexEffect)
+          ->connect_to(new SKOutputString("environment.outside.heatIndexEffect"));
+ 
   sensesp_app->enable();
 });

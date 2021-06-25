@@ -22,8 +22,7 @@
   ],
   "dependencies": [
     {
-      "name": "ReactESP",
-      "version": "^0.2.2"
+      "name": "ReactESP"
     },
     {
       "name": "ESP8266WebServer",
@@ -57,11 +56,11 @@
       "name": "WebSockets"
     },
     {
-      "name": "OneWire",
-      "version": "paulstoffregen/OneWire"
+      "name": "OneWireNg"
     },
     {
-      "name": "DallasTemperature"
+      "name": "DallasTemperature",
+      "version": "https://github.com/pstolarz/Arduino-Temperature-Control-Library"
     },
     {
       "name": "ESPTrueRandom",
@@ -93,9 +92,6 @@
       "name": "Adafruit MAX31856 library"
     },
     {
-      "name": "Adafruit Unified Sensor"
-    },
-    {
       "name": "Adafruit BusIO"
     },
     {
@@ -106,7 +102,7 @@
       "version": "https://github.com/BjarneBitscrambler/OrientationSensorFusion-ESP"
     }
   ],
-  "version": "1.0.1",
+  "version": "1.0.6-alpha",
   "frameworks": "arduino",
   "platforms": "*"
 }

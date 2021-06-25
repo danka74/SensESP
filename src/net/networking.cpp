@@ -38,19 +38,6 @@ Networking::Networking(String config_path, String ssid, String password,
   wifi_manager = new AsyncWiFiManager(server, dns);
 }
 
-void Networking::check_connection() {
-  if (WiFi.status() != WL_CONNECTED) {
-    // if connection is lost, simply restart
-    debugD("Wifi disconnected: restarting...");
-
-    // Might be futile to notify about a disconnection if it results in
-    // a reboot anyway
-    this->emit(WifiState::kWifiDisconnected);
-
-    ESP.restart();
-  }
-}
-
 void Networking::setup() {
   if (ap_ssid != "" && ap_password != "") {
     setup_saved_ssid();
@@ -58,37 +45,62 @@ void Networking::setup() {
   if (ap_ssid == "" && WiFi.status() != WL_CONNECTED) {
     setup_wifi_manager();
   }
-  app.onRepeat(1000, std::bind(&Networking::check_connection, this));
+}
+
+void Networking::setup_wifi_callbacks() {
+#if defined(ESP8266)
+  got_ip_event_handler_ =
+      WiFi.onStationModeGotIP([this](const WiFiEventStationModeGotIP& event) {
+        this->wifi_station_connected();
+      });
+  wifi_disconnected_event_handler_ = WiFi.onStationModeDisconnected(
+      [this](const WiFiEventStationModeDisconnected& event) {
+        this->wifi_station_disconnected();
+      });
+#elif defined(ESP32)
+  WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info) {
+    this->wifi_station_connected();
+  }, WiFiEvent_t::SYSTEM_EVENT_STA_GOT_IP);
+  WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info) {
+    this->wifi_station_disconnected();
+  }, WiFiEvent_t::SYSTEM_EVENT_STA_DISCONNECTED);  
+#endif
 }
 
 void Networking::setup_saved_ssid() {
-  WiFi.begin(ap_ssid.c_str(), ap_password.c_str());
   this->emit(WifiState::kWifiDisconnected);
+  setup_wifi_callbacks();
 
-  uint32_t timer_start = millis();
+#ifdef ESP32
+  WiFi.setHostname(hostname->get().c_str());
+#elif defined(ESP8266)
+  WiFi.hostname(hostname->get().c_str());
+#endif
+
+  WiFi.begin(ap_ssid.c_str(), ap_password.c_str());
 
   debugI("Connecting to wifi %s.", ap_ssid.c_str());
-  int printCounter = 0;
-  while (WiFi.status() != WL_CONNECTED &&
-         (millis() - timer_start) < 3 * 60 * 1000) {
-    delay(500);
-    if (printCounter % 4) {
-      debugI("Wifi status=%d, time=%d ms", WiFi.status(), 500 * printCounter);
-    }
-    printCounter++;
-  }
+}
 
-  if (WiFi.status() == WL_CONNECTED) {
+void Networking::wifi_station_connected() {
     debugI("Connected to wifi, SSID: %s (signal: %d)", WiFi.SSID().c_str(),
            WiFi.RSSI());
     debugI("IP address of Device: %s", WiFi.localIP().toString().c_str());
     this->emit(WifiState::kWifiConnectedToAP);
-    WiFi.mode(WIFI_STA);
-  }
+#if defined(ESP8266)
+    WiFi.mode(WIFI_STA); // so "Configure <hostname>" AP won't appear
+#endif        
+}
+
+void Networking::wifi_station_disconnected() {
+  debugI("Disconnected from wifi.");
+  this->emit(WifiState::kWifiDisconnected);
 }
 
 void Networking::setup_wifi_manager() {
   should_save_config = false;
+
+  setup_wifi_callbacks();
 
   // set config save notify callback
   wifi_manager->setSaveConfigCallback(save_config_callback);
@@ -109,6 +121,12 @@ void Networking::setup_wifi_manager() {
   const char* pconfig_ssid = config_ssid.c_str();
 
   this->emit(WifiState::kWifiManagerActivated);
+
+#ifdef ESP32
+  WiFi.setHostname(hostname->get().c_str());
+#elif defined(ESP8266)
+  WiFi.hostname(hostname->get().c_str());
+#endif
 
   if (!wifi_manager->autoConnect(pconfig_ssid)) {
     debugE("Failed to connect to wifi and config timed out. Restarting...");
@@ -162,21 +180,13 @@ String Networking::get_config_schema() {
   // Config UI. If preset_hostname is not "SensESP", then it was set in
   // main.cpp, so it should be read-only.
   bool hostname_preset = preset_hostname != "SensESP";
-  bool wifi_preset = preset_ssid != "";
   return String(FPSTR(SCHEMA_PREFIX)) +
          get_property_row("hostname", "ESP device hostname", hostname_preset) +
-         "," +
-         get_property_row("ap_ssid", "Wifi Access Point SSID", wifi_preset) +
-         "," +
-         get_property_row("ap_password", "Wifi Access Point Password",
-                          wifi_preset) +
          "}}";
 }
 
 void Networking::get_configuration(JsonObject& root) {
   root["hostname"] = this->hostname->get();
-  root["ap_ssid"] = this->ap_ssid;
-  root["ap_password"] = this->ap_password;
 }
 
 bool Networking::set_configuration(const JsonObject& config) {
@@ -188,11 +198,6 @@ bool Networking::set_configuration(const JsonObject& config) {
     this->hostname->set(config["hostname"].as<String>());
   }
 
-  if (preset_ssid == "") {
-    debugW("Using saved SSID and password");
-    this->ap_ssid = config["ap_ssid"].as<String>();
-    this->ap_password = config["ap_password"].as<String>();
-  }
   return true;
 }
 
@@ -201,5 +206,8 @@ void Networking::reset_settings() {
   ap_password = preset_password;
 
   save_configuration();
-  wifi_manager->resetSettings();
+  WiFi.disconnect(true);
+  // On ESP32, disconnect does not erase previous credentials. Let's connect
+  // to a bogus network instead
+  WiFi.begin("0", "0");
 }
